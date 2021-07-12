@@ -7,9 +7,9 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-
-os.makedirs('./log_dir', exist_ok=True)
-os.makedirs('./ckp', exist_ok=True)
+os.makedirs('./dual_loss', exist_ok=True)
+os.makedirs('./dual_loss/log_dir', exist_ok=True)
+os.makedirs('./dual_loss/ckp', exist_ok=True)
 
 
 if tf.__version__[:3] == '2.3':
@@ -77,8 +77,8 @@ def preprocess(self, arrays, row, **kwargs):
 # --- Create a test Client
 
 #client = Client('D:\\data/raw/covid_biomarker/data/ymls/client-dual-256.yml')
-
-client = Client('/data/raw/covid_biomarker/data/ymls/client-dual-256.yml')
+configs = {'batch': {'size': 4, 'fold': 0}}
+client = Client('/data/raw/covid_biomarker/data/ymls/client-dual-256.yml', configs=configs)
 
 gen_train, gen_valid = client.create_generators()
 inputs = client.get_inputs(Input)
@@ -127,10 +127,10 @@ model.compile(
 )
 
 client.load_data_in_memory()
-reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='ratio_mae', factor=0.8, patience=2, mode="max", verbose=1)
-early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='ratio_mae', patience=5, verbose=0, mode='max', restore_best_weights=False)
-model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./ckp/', monitor='ratio_mae', mode='max', save_best_only=True)
-tensorboard_callback = tf.keras.callbacks.TensorBoard('./log_dir', profile_batch=0)
+reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
+early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='ratio_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
+model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./dual_loss/ckp/', monitor='ratio_mae', mode='min', save_best_only=True)
+tensorboard_callback = tf.keras.callbacks.TensorBoard('./dual_loss/log_dir', profile_batch=0)
 
 model.fit(
     x=gen_train,
@@ -142,4 +142,4 @@ model.fit(
     callbacks=[reduce_lr_callback, early_stop_callback, tensorboard_callback, model_checkpoint_callback]
 )
 
-model.save('./model.h5', overwrite=True, include_optimizer=False)
+model.save('./dual_loss/model.h5', overwrite=True, include_optimizer=False)

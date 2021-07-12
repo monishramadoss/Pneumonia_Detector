@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# my stuff
+*stdout
+/ckp
+/log_dir
+*.h5

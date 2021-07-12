@@ -26,9 +26,9 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-
-os.makedirs('./log_dir', exist_ok=True)
-os.makedirs('./ckp', exist_ok=True)
+os.makedirs('./single_loss/', exist_ok=True)
+os.makedirs('./single_loss/log_dir', exist_ok=True)
+os.makedirs('./single_loss/ckp', exist_ok=True)
 
 
 try:
@@ -38,7 +38,8 @@ except:
     pass
 
 #client = Client('D:\\data/raw/covid_biomarker/data/ymls/client-uci-256.yml')
-client = Client('/data/raw/covid_biomarker/data/ymls/client-uci-256.yml')
+configs = {'batch': {'size': 4, 'fold': 0}}
+client = Client('/data/raw/covid_biomarker/data/ymls/client-uci-256.yml', configs=configs)
 gen_train, gen_valid = client.create_generators()
 inputs = client.get_inputs(Input)
 
@@ -65,7 +66,7 @@ conv3t = lambda x, filters : layers.Conv3DTranspose(filters, kernel_size=(1,2,2)
                                             strides=(1,2,2))(x)
 convT = lambda x, filters : conv3t(relu(norm(x)), filters)
 
-def dense_block(x, k=8, n=3, b=1, verbose=True):
+def dense_block(x, k=8, n=3, b=1, verbose=False):
     ds_layer = None
     for i in range(n):
         cc_layer = concat(cc_layer, ds_layer) if ds_layer is not None else x
@@ -125,10 +126,10 @@ model.compile(
     metrics={'ratio': 'mae'},
     experimental_run_tf_function=False)
 
-reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_mae', factor=0.8, patience=2, mode="min", verbose=1)
-early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=5, verbose=0, mode='min', restore_best_weights=False)
-model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./ckp/', monitor='val_mae', mode='min', save_best_only=True)
-tensorboard_callback = tf.keras.callbacks.TensorBoard('./log_dir', profile_batch=0)
+reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
+early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
+model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./single_loss/ckp/', monitor='val_mae', mode='min', save_best_only=True)
+tensorboard_callback = tf.keras.callbacks.TensorBoard('./single_loss/log_dir', profile_batch=0)
 
 
 model.fit(
@@ -143,8 +144,4 @@ model.fit(
 
 
 model.trainable=False
-model.save('model.h5', overwrite=True, include_optimizer=False)
-
-# new_model = tf.keras.models.load_model('./model.h5')
-# print(new_model.summary())
-
+model.save('./single_loss/model.h5', overwrite=True, include_optimizer=False)
