@@ -65,7 +65,7 @@ except:
 
 @overload(Client)
 def preprocess(self, arrays, row, **kwargs):
-    if row['corhort-uci']:
+    if row['cohort-uci']:
         arrays['xs']['msk-pna'][:] = 0.0
         arrays['xs']['msk-ratio'][:] = 1.0
     else:
@@ -127,14 +127,14 @@ model.compile(
 )
 
 client.load_data_in_memory()
-reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_dsc_1', factor=0.8, patience=2, mode="max", verbose=1)
-early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_dsc_1', patience=5, verbose=0, mode='max', restore_best_weights=False)
-model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./ckp/', monitor='val_dsc_1', mode='max', save_best_only=True)
+reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='ratio_mae', factor=0.8, patience=2, mode="max", verbose=1)
+early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='ratio_mae', patience=5, verbose=0, mode='max', restore_best_weights=False)
+model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./ckp/', monitor='ratio_mae', mode='max', save_best_only=True)
 tensorboard_callback = tf.keras.callbacks.TensorBoard('./log_dir', profile_batch=0)
 
 model.fit(
     x=gen_train,
-    epochs=40,
+    epochs=100,
     steps_per_epoch=1000,
     validation_data=gen_valid,
     validation_steps=500,
