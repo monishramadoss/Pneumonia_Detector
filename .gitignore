@@ -130,6 +130,6 @@ dmypy.json
 
 # my stuff
 *stdout
-/ckp
-/log_dir
+**/*chp
+**/*log_dir
 *.h5

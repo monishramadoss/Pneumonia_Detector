@@ -53,6 +53,72 @@ def unet(inputs, label, filters = 32, size=4):
     logits[label] = layers.Conv3D(2, (1,3,3), padding='same', name=label, use_bias=False)(x)
     return Model(inputs, logits)
 
+
+def denseunet(inputs, label, filters=32, scale_0 = 1, scale_1=1, stage_1=1, stage_2=3 , stage_3=3, stage_4=1):
+    '''Model Creation'''
+    # Define model#
+    # Define kwargs dictionary#
+    kwargs = {
+        'kernel_size': (1, 3, 3),
+        'padding': 'same',
+        'use_bias': False}  # zeros, ones, golorit_uniform
+    # Define lambda functions#
+    conv = lambda x, filters, strides: layers.Conv3D(filters=int(filters), strides=(1, strides, strides), **kwargs)(x)
+    norm = lambda x: layers.BatchNormalization()(x)
+    relu = lambda x: layers.LeakyReLU()(x)
+    # Define stride-1, stride-2 blocks#
+    conv1 = lambda filters, x: relu(norm(conv(x, filters, strides=1)))
+    conv2 = lambda filters, x: relu(norm(conv(x, filters, strides=2)))
+    # Define single transpose#
+    tran = lambda x, filters, strides: layers.Conv3DTranspose(filters=int(filters), strides=(1, strides, strides),
+                                                              **kwargs)(x)
+    # Define transpose block#
+    tran2 = lambda filters, x: relu(norm(tran(x, filters, strides=2)))
+    concat = lambda a, b: layers.Concatenate()([a, b])
+
+    # Define Dense Block#
+    def dense_block(filters, input, DB_depth):
+        ext = 3 + DB_depth
+        outside_layer = input
+        for _ in range(0, int(ext)):
+            inside_layer = conv1(filters, outside_layer)
+            outside_layer = concat(outside_layer, inside_layer)
+        return outside_layer
+
+    def td_block(conv1_filters, conv2_filters, input, DB_depth):
+        TD = conv1(conv1_filters, conv2(conv2_filters, input))
+        DB = dense_block(conv1_filters, TD, DB_depth)
+        return DB
+
+    def tu_block(conv1_filters, tran2_filters, input, td_input, DB_depth, skip_DB_depth=1):
+        t1 = tran2(tran2_filters, input)
+        TU = dense_block(conv1_filters, t1, skip_DB_depth)
+        C = concat(TU, td_input)
+        DB = dense_block(conv1_filters, C, DB_depth)
+        return DB
+
+    TD0 = conv1(filters*scale_0, inputs['dat'])
+    TD1 = td_block(filters * 1, filters * 1, TD0, stage_1)
+    TD2 = td_block(filters * 1.5, filters * 1, TD1, stage_1)
+    TD3 = td_block(filters * 2, filters * 1.5, TD2, stage_1)
+    TD4 = td_block(filters * 2.5, filters * 2, TD3, stage_2)
+    
+    TD5 = td_block(filters * 3, filters * 2.5, TD4, stage_2)
+    r1 = layers.Flatten()(TD5)
+    r1 = layers.Dense(512)(r1)
+    r1 = layers.Dense(512)(r1)
+    
+    TU1 = tu_block(filters * 2.5, filters * 3, TD5, TD4, stage_2, stage_3)
+    TU2 = tu_block(filters * 2, filters * 2.5, TU1, TD3, stage_2, stage_3)
+    TU3 = tu_block(filters * 1.5, filters * 2, TU2, TD2, stage_1, stage_4)
+    TU4 = tu_block(filters * 1, filters * 1.5, TU3, TD1, stage_1, stage_4)
+    TU5 = tran2(filters * scale_1, TU4)
+    logits = {}
+    logits['ratio'] = layers.Dense(1, activation='sigmoid', name='ratio', use_bias=False)(r1)
+    logits[label] = layers.Conv3D(filters=2, name=label, **kwargs)(TU5)
+    model = Model(inputs=inputs, outputs=logits)
+    return model
+
 from jarvis.train.client import Client
 from jarvis.train import models, params, custom
 from jarvis.utils.general import overload
@@ -98,14 +164,12 @@ def dsc_soft(weights=None, scale=1.0, epsilon=0.01, cls=1):
         return (1.0 - A / B) * scale
     return dsc
 
-
 def sce(weights=None, scale=1.0):
     loss = losses.SparseCategoricalCrossentropy(from_logits=True)
     @tf.function
     def sce(y_true, y_pred):
         return loss(y_true=y_true, y_pred=y_pred, sample_weight=weights) * scale
     return sce
-
 
 def happy_meal(weights=None, alpha=5, beta=1,  epsilon=0.01, cls=1):
     l2 = sce(None, alpha)
@@ -115,7 +179,7 @@ def happy_meal(weights=None, alpha=5, beta=1,  epsilon=0.01, cls=1):
         return l2(y_true, y_pred) + l1(y_true, y_pred)
     return calc_loss
 
-model = unet(inputs,label,  32)
+model = denseunet(inputs, label,  32)
 #model = da_unet(inputs)
 model.compile(
     optimizer=optimizers.Adam(learning_rate=1e-4),
@@ -127,9 +191,9 @@ model.compile(
 )
 
 client.load_data_in_memory()
-reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
-early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='ratio_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
-model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./dual_loss/ckp/', monitor='ratio_mae', mode='min', save_best_only=True)
+reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='ratio_mae', factor=0.8, patience=2, mode="min", verbose=1)
+#early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_ratio_mae', patience=20, verbose=1, mode='min', restore_best_weights=False)
+model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./dual_loss/ckp/', monitor='val_ratio_mae', mode='min', save_best_only=True)
 tensorboard_callback = tf.keras.callbacks.TensorBoard('./dual_loss/log_dir', profile_batch=0)
 
 model.fit(
@@ -139,7 +203,7 @@ model.fit(
     validation_data=gen_valid,
     validation_steps=500,
     validation_freq=1,
-    callbacks=[reduce_lr_callback, early_stop_callback, tensorboard_callback, model_checkpoint_callback]
+    callbacks=[reduce_lr_callback,  tensorboard_callback, model_checkpoint_callback]
 )
 
 model.save('./dual_loss/model.h5', overwrite=True, include_optimizer=False)

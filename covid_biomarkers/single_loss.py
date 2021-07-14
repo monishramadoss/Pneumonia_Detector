@@ -127,7 +127,7 @@ model.compile(
     experimental_run_tf_function=False)
 
 reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
-early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
+#early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./single_loss/ckp/', monitor='val_mae', mode='min', save_best_only=True)
 tensorboard_callback = tf.keras.callbacks.TensorBoard('./single_loss/log_dir', profile_batch=0)
 
@@ -139,7 +139,7 @@ model.fit(
     validation_data=gen_valid,
     validation_steps=500,
     validation_freq=1,
-    callbacks=[reduce_lr_callback, early_stop_callback, tensorboard_callback, model_checkpoint_callback]
+    callbacks=[reduce_lr_callback,tensorboard_callback, model_checkpoint_callback]
 )
 
 
