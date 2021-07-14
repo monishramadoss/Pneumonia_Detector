@@ -129,7 +129,10 @@ dmypy.json
 .pyre/
 
 # my stuff
-*stdout
-**/*chp
-**/*log_dir
+covid_biomarkers/**stdout
+covid_biomarkers/*ckp
+covid_biomarkers/*log_dir
 *.h5
+*.v2
+*.index
+*.pb
