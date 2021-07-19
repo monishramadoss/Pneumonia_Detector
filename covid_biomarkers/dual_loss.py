@@ -15,45 +15,6 @@ os.makedirs('./dual_loss/ckp', exist_ok=True)
 if tf.__version__[:3] == '2.3':
     tf.compat.v1.disable_eager_execution()
 
-def conv_bn_relu(input, filters, kernel_size=3, stride=1, name=None):
-    x = layers.Conv3D(filters, (1, kernel_size, kernel_size), padding='same', strides=(1, stride, stride), name=name, use_bias=False)(input)
-    x = layers.BatchNormalization()(x)
-    x = layers.LeakyReLU()(x)
-    return x
-
-label = 'pna'
-def unet(inputs, label, filters = 32, size=4):
-    x = inputs['dat']
-    encoder_block = []
-    filter_start = 4
-    #encoder_block
-    for en in range(size):
-        x = conv_bn_relu(x, filters * filter_start, name='en_'+str(en))
-        x = conv_bn_relu(x, filters * filter_start)        
-        x = conv_bn_relu(x, filters * filter_start, stride=2)
-        filter_start = 2
-        encoder_block.append(x)
-
-    x = conv_bn_relu(x, filters * filter_start)
-    x = conv_bn_relu(x, filters * filter_start)
-    r1 = layers.Flatten()(x)
-    r1 = layers.Dense(512)(r1)
-    r1 = layers.Dense(512)(r1)
-
-    for de in range(size):
-        skip = encoder_block.pop(-1)
-        x = layers.concatenate([skip, x])
-        x = conv_bn_relu(x, filters * filter_start, name='de_'+str(de))
-        x = conv_bn_relu(x, filters * filter_start)
-        x = layers.UpSampling3D(size=(1,2,2))(x)
-        filter_start = filter_start * 2
-
-    logits = {}
-    logits['ratio'] = layers.Dense(1, activation='sigmoid', name='ratio', use_bias=False)(r1)
-    logits[label] = layers.Conv3D(2, (1,3,3), padding='same', name=label, use_bias=False)(x)
-    return Model(inputs, logits)
-
-
 def denseunet(inputs, label, filters=32, scale_0 = 1, scale_1=1, stage_1=1, stage_2=3 , stage_3=3, stage_4=1):
     '''Model Creation'''
     # Define model#

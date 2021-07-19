@@ -129,9 +129,10 @@ dmypy.json
 .pyre/
 
 # my stuff
-?stdout
 ckp/
 log_dir/
+dual_loss_stdout
+single_loss_stdout
 *.h5
 *.log
 
