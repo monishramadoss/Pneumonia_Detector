@@ -33,22 +33,10 @@ os.makedirs('./single_loss/ckp', exist_ok=True)
 
 try:
     from jarvis.utils.general import gpus
-    gpus.autoselect(1)
+    gpus.autoselect(2)
 except:
     pass
 
-#client = Client('D:\\data/raw/covid_biomarker/data/ymls/client-uci-256.yml')
-configs = {'batch': {'size': 4, 'fold': 0}}
-client = Client('/data/raw/covid_biomarker/data/ymls/client-uci-256.yml', configs=configs)
-gen_train, gen_valid = client.create_generators()
-inputs = client.get_inputs(Input)
-
-xs, ys = next(gen_train)
-for key, arr in xs.items():
-    print('xs key: {} | shape = {}'.format(key.ljust(8), arr.shape))
-for key, arr in ys.items():
-    print('ys key: {} | shape = {}'.format(key.ljust(8), arr.shape))
-client.load_data_in_memory()
 
 conv3 = lambda x, filters : layers.Conv3D(kernel_size=(1, 3, 3), filters=filters, 
                                           strides=1, padding='same')(x)
@@ -66,32 +54,34 @@ conv3t = lambda x, filters : layers.Conv3DTranspose(filters, kernel_size=(1,2,2)
                                             strides=(1,2,2))(x)
 convT = lambda x, filters : conv3t(relu(norm(x)), filters)
 
-def dense_block(x, k=8, n=3, b=1, verbose=False):
-    ds_layer = None
-    for i in range(n):
-        cc_layer = concat(cc_layer, ds_layer) if ds_layer is not None else x
-        bn_layer = bneck(cc_layer, b * k) if i >= b else cc_layer
-        ds_layer = dense(bn_layer, k)
-        if verbose:
-            print('Creating layer {:02d}: cc_layer = {}'.format(i, cc_layer.shape))
-            print('Creating layer {:02d}: bn_layer = {}'.format(i, bn_layer.shape))
-            print('Creating layer {:02d}: ds_layer = {}'.format(i, ds_layer.shape))    
-    return concat(cc_layer, ds_layer)
+def make_model():
+    def dense_block(x, k=8, n=3, b=1, verbose=False):
+        ds_layer = None
+        for i in range(n):
+            cc_layer = concat(cc_layer, ds_layer) if ds_layer is not None else x
+            bn_layer = bneck(cc_layer, b * k) if i >= b else cc_layer
+            ds_layer = dense(bn_layer, k)
+            if verbose:
+                print('Creating layer {:02d}: cc_layer = {}'.format(i, cc_layer.shape))
+                print('Creating layer {:02d}: bn_layer = {}'.format(i, bn_layer.shape))
+                print('Creating layer {:02d}: ds_layer = {}'.format(i, ds_layer.shape))    
+        return concat(cc_layer, ds_layer)
 
-dense_block_ = lambda x : dense_block(x, k=16, n=3, b=1)
-b0 = conv3(inputs['dat'], filters=8)
-b1 = pool(dense_block_(b0))
-b2 = pool(dense_block_(b1))
+    dense_block_ = lambda x : dense_block(x, k=16, n=3, b=1)
+    b0 = conv3(inputs['dat'], filters=8)
+    b1 = pool(dense_block_(b0))
+    b2 = pool(dense_block_(b1))
 
-dense_block_ = lambda x : dense_block(x, k=24, n=4, b=2)
-b3 = trans(dense_block_(b2), 80)
-b4 = trans(dense_block_(b3), 96)
-b5 = trans(dense_block_(b4), 112)
-b6 = dense_block_(b5)
-p1 = layers.GlobalAveragePooling3D()(b6)
-logits = {}
-logits['ratio'] = layers.Dense(1, name='ratio')(p1)
-model = Model(inputs=inputs, outputs=logits)
+    dense_block_ = lambda x : dense_block(x, k=24, n=4, b=2)
+    b3 = trans(dense_block_(b2), 80)
+    b4 = trans(dense_block_(b3), 96)
+    b5 = trans(dense_block_(b4), 112)
+    b6 = dense_block_(b5)
+    p1 = layers.GlobalAveragePooling3D()(b6)
+    logits = {}
+    logits['ratio'] = layers.Dense(1, name='ratio')(p1)
+    model = Model(inputs=inputs, outputs=logits)
+    return model
 
 def dsc_soft(weights=None, scale=1.0, epsilon=0.01, cls=1):
     scale = float(scale)
@@ -120,17 +110,25 @@ def happy_meal(alpha=5, beta=1, weights=None, epsilon=1, cls=1):
         return l2(y_true, y_pred) + l1(y_true, y_pred)
     return calc_loss
 
-model.compile(
-    optimizer=optimizers.Adam(learning_rate=2e-4),
-    loss={'ratio': 'mse' },
-    metrics={'ratio': 'mae'},
-    experimental_run_tf_function=False)
-
 reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
 #early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./single_loss/ckp/', monitor='val_mae', mode='min', save_best_only=True)
 tensorboard_callback = tf.keras.callbacks.TensorBoard('./single_loss/log_dir', profile_batch=0)
 
+
+#client = Client('D:\\data/raw/covid_biomarker/data/ymls/client-uci-256.yml')
+configs = {'batch': {'size': 4, 'fold': 0}}
+client = Client('/data/raw/covid_biomarker/data/ymls/client-uci-256.yml', configs=configs)
+gen_train, gen_valid = client.create_generators()
+inputs = client.get_inputs(Input)
+
+model = make_model()
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=2e-4),
+    loss={'ratio': 'mse' },
+    metrics={'ratio': 'mae'},
+    experimental_run_tf_function=False
+)
 
 model.fit(
     x=gen_train,
@@ -139,9 +137,7 @@ model.fit(
     validation_data=gen_valid,
     validation_steps=500,
     validation_freq=1,
-    callbacks=[reduce_lr_callback,tensorboard_callback, model_checkpoint_callback]
+    callbacks=[reduce_lr_callback, tensorboard_callback, model_checkpoint_callback]
 )
 
-
-model.trainable=False
 model.save('./single_loss/model.h5', overwrite=True, include_optimizer=False)
