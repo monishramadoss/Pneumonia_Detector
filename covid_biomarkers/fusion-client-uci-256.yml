@@ -1,0 +1,33 @@
+_id:
+  project: covid_biomarker 
+  version: null 
+_db: /data/ymls/db-generic-all.yml 
+batch:
+  fold: 0 
+  size: 16 
+  sampling:
+    cohort-uci: 1.0
+specs:
+  xs:
+    dat:
+      dtype: float32
+      loads: dat-256-xr
+      norms:
+        shift: "@mean" 
+        scale: "@std"
+      rands:
+        shift:
+          lower: -0.1 
+          upper: +0.1 
+        scale: 
+          lower: 0.9
+          upper: 1.1
+      shape: [256, 256, 1]
+  ys:
+    ratio:
+      dtype: float32 
+      loads: ratio 
+      norms: null
+      shape: [1]
+  load_kwargs:
+      verbose: false
