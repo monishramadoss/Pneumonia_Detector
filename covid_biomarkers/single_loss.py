@@ -83,33 +83,6 @@ def make_model():
     model = Model(inputs=inputs, outputs=logits)
     return model
 
-def dsc_soft(weights=None, scale=1.0, epsilon=0.01, cls=1):
-    scale = float(scale)
-    def dsc(y_true, y_pred):
-        true = tf.cast(y_true[..., 0] == cls, tf.float32)
-        pred = tf.nn.softmax(y_pred, axis=-1)[..., cls]
-        if weights is not None:
-            true = true * weights
-            pred = pred * weights
-        A = tf.math.reduce_sum(true * pred) * 2
-        B = tf.math.reduce_sum(true) + tf.math.reduce_sum(pred) + epsilon
-        return (1.0-(A / B)) * scale
-    return dsc
-
-def sce(weights=None, scale=1.0):
-    scale=float(scale)
-    loss = losses.SparseCategoricalCrossentropy(from_logits=True)
-    def sce(y_true, y_pred):
-        return loss(y_true=y_true, y_pred=y_pred, sample_weight=weights) * scale
-    return sce
-
-def happy_meal(alpha=5, beta=1, weights=None, epsilon=1, cls=1):
-    l2 = sce(weights=weights, scale=alpha)
-    l1 = dsc_soft(weights=None, scale=beta, epsilon=epsilon, cls=1)
-    def calc_loss(y_true, y_pred):
-        return l2(y_true, y_pred) + l1(y_true, y_pred)
-    return calc_loss
-
 reduce_lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='mae', factor=0.8, patience=2, mode="min", verbose=1)
 #early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='val_mae', patience=20, verbose=0, mode='min', restore_best_weights=False)
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./single_loss/ckp/', monitor='val_mae', mode='min', save_best_only=True)
