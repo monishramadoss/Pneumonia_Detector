@@ -22,7 +22,8 @@ specs:
         scale: 
           lower: 0.9
           upper: 1.1
-      shape: [256, 256, 1]
+      shape: [256, 256, 1)]
+   
   ys:
     ratio:
       dtype: float32 

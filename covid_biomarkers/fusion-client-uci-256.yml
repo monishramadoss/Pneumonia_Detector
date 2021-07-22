@@ -19,10 +19,15 @@ specs:
         shift:
           lower: -0.1 
           upper: +0.1 
-        scale: 
+      scale: 
           lower: 0.9
           upper: 1.1
-      shape: [256, 256, 1]
+      shape: [1, 256, 256, 1]
+    local-dat:
+      dtype: float32
+      loads: null
+      norms: null
+      shape: [1, 256, 256, 1]      
   ys:
     ratio:
       dtype: float32 
