@@ -90,7 +90,7 @@ model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath='./fusio
 tensorboard_callback = tf.keras.callbacks.TensorBoard('./fusion_loss/log_dir', profile_batch=0)
 
 configs = {'batch': {'size': 4, 'fold': 0}}
-client = Client('./fusion-client-uci-256.yml', configs=configs)
+client = Client('./ymls/fusion-client-uci-256.yml', configs=configs)
 gen_train, gen_valid = client.create_generators()
 inputs = client.get_inputs(Input)
 

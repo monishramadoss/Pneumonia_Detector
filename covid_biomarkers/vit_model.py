@@ -209,7 +209,7 @@ except:
     pass
 
 configs = {'batch': {'size': 32, 'fold': 0}}
-client = Client('./vit-client-uci-256.yml', configs=configs)
+client = Client('./ymls/vit-client-uci-256.yml', configs=configs)
 gen_train, gen_valid = client.create_generators()
 inputs = client.get_inputs(Input)
 
